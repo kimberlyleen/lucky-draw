@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>학교 행운권 추첨기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+<style>
+/* Layout: stage screen. 큰 추첨판(왼쪽) + 당첨 기록(오른쪽), 좁은 화면에서는 위아래로. 강당 프로젝터용 단일 어두운 테마. */
+:root{
+  color-scheme: dark;
+  --bg:#1a1320;
+  --panel:#251b2d;
+  --line:#3b2d46;
+  --fg:#f4e9f0;
+  --muted:#b9a6bf;
+  --accent:#e9a8c8;
+  --gold:#f1cf72;
+  --warn:#f08a7a;
+  --f-display:"Black Han Sans","Do Hyeon","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-head:"Do Hyeon","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;padding-inline:16px;padding-block:14px 24px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-height:100%}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-family:var(--f-head);font-weight:400;font-size:1.7rem;margin:0;letter-spacing:.02em}
+.brand span{color:var(--muted);font-size:.9rem}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:.5em 1em}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.4;cursor:not-allowed}
+button[aria-pressed="true"]{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
+
+.vol{flex-direction:row;align-items:center;gap:6px;font-size:.85rem;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:0 .7em;background:var(--panel)}
+.vol input{width:96px;padding:0;border:0;background:transparent;accent-color:var(--accent)}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;flex:1}
+@media (max-width:820px){.stage{grid-template-columns:1fr}}
+.board{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,3vw,36px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(14px,2.2vw,26px);min-width:0;position:relative;overflow:hidden}
+.board::before{content:"";position:absolute;inset:auto -10% -55% -10%;height:80%;background:radial-gradient(closest-side,rgba(233,168,200,.13),transparent);pointer-events:none}
+.board > *{position:relative}
+.modes{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.modes button{font-size:.9rem;padding:.35em .9em}
+.batchopt{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.95rem}
+.batchopt input{width:5em;text-align:center}
+.prize{font-family:var(--f-head);font-size:clamp(1.6rem,4vw,3rem);color:var(--accent);text-align:center;text-wrap:balance}
+.prize small{display:block;font-family:var(--f-body);font-size:.4em;color:var(--muted);letter-spacing:.08em;margin-top:4px}
+.ticket{display:flex;align-items:baseline;justify-content:center;gap:clamp(6px,1.5vw,18px);font-family:var(--f-display);font-variant-numeric:tabular-nums;line-height:1;flex-wrap:wrap}
+.ticket .n{font-size:clamp(4rem,14vw,11rem);min-width:1.1ch;text-align:center;color:var(--line)}
+.ticket .u{font-family:var(--f-head);font-size:clamp(1.4rem,4vw,3.4rem);color:var(--muted)}
+.ticket .n.spin{color:var(--fg)}
+.ticket .n.shown{color:var(--accent)}
+.ticket .n.win{color:var(--gold);animation:pop .5s ease-out}
+@keyframes pop{0%{transform:scale(.85)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+.batch{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+.batch .legend{color:var(--muted);font-size:.85rem;letter-spacing:.08em}
+.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(8px,1.2vw,14px);list-style:none;margin:0;padding:0;max-height:46vh;overflow:auto}
+.grid li button{font-family:var(--f-display);font-variant-numeric:tabular-nums;font-size:clamp(1.6rem,3.6vw,3rem);line-height:1.1;padding:.2em .5em;border-radius:12px;background:var(--bg);color:var(--fg);border:2px solid var(--line);min-width:4.2em}
+.grid li button.win{color:var(--gold);border-color:var(--gold);animation:pop .4s ease-out}
+.grid li button.sel{color:var(--warn);border-color:var(--warn);text-decoration:line-through}
+.msg{min-height:1.6em;color:var(--muted);text-align:center;font-size:1.05rem}
+.msg.done{color:var(--gold);font-family:var(--f-head);font-size:1.6rem}
+.actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.big{font-family:var(--f-head);font-size:1.5rem;padding:.45em 1.8em;background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.big:hover{filter:brightness(1.08)}
+.hint{color:var(--muted);font-size:.82rem;text-align:center}
+
+.log{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.log h2{font-family:var(--f-head);font-weight:400;font-size:1.3rem;margin:0}
+.pool{font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.groups{display:flex;flex-direction:column;gap:12px;overflow:auto;max-height:60vh}
+.group h3{margin:0 0 4px;font-size:.95rem;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.group h3 span{color:var(--muted);font-weight:400;font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.chips li{font-family:var(--f-head);font-size:1.05rem;padding:2px 10px;border-radius:999px;border:1px solid var(--gold);color:var(--gold);font-variant-numeric:tabular-nums}
+.chips li.absent{border-color:var(--line);color:var(--muted);text-decoration:line-through}
+.empty{color:var(--muted);font-size:.9rem}
+.logbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.logbtns button{font-size:.88rem;padding:.4em .8em}
+.confirm{border:1px solid var(--warn);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;font-size:.9rem}
+.confirm div{display:flex;gap:8px;flex-wrap:wrap}
+.danger{border-color:var(--warn);color:var(--warn)}
+
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card.wide{grid-column:1/-1}
+.card h2{font-family:var(--f-head);font-weight:400;font-size:1.35rem;margin:0}
+.card p{margin:0;color:var(--muted);font-size:.88rem}
+.choice{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px}
+.choice button{text-align:left;display:flex;flex-direction:column;gap:2px;padding:.8em 1em}
+.choice button strong{font-family:var(--f-head);font-weight:400;font-size:1.25rem}
+.choice button span{font-size:.85rem;opacity:.85}
+.example{align-self:flex-start;font-size:.78rem;letter-spacing:.06em;border:1px dashed var(--accent);color:var(--accent);border-radius:6px;padding:1px 8px}
+.rows{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;gap:8px;align-items:end;border-bottom:1px solid var(--line);padding-bottom:10px}
+.row.grade{grid-template-columns:repeat(3,minmax(0,1fr)) auto}
+.row.grade .over{grid-column:1/-1}
+.row.prize-row{grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto}
+.row.single{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+label{display:flex;flex-direction:column;gap:3px;font-size:.8rem;color:var(--muted);min-width:0}
+input,textarea{font:inherit;font-size:1rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.45em .6em;width:100%;min-width:0}
+textarea{resize:vertical;min-height:4.5em}
+.x{padding:.45em .7em;color:var(--muted)}
+.add{align-self:flex-start;font-size:.9rem}
+.summary{font-variant-numeric:tabular-nums;font-size:.95rem}
+.summary strong{color:var(--gold);font-family:var(--f-head);font-size:1.3rem;font-weight:400}
+.errors{color:var(--warn);font-size:.88rem;margin:0;padding-left:1.1em}
+.warnbox{color:var(--warn);font-size:.88rem}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{font-size:.9rem;padding:.35em .9em}
+.qwrap{overflow-x:auto}
+.qtable{border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:100%}
+.qtable th,.qtable td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:center;white-space:nowrap}
+.qtable th{font-weight:600;font-size:.88rem}
+.qtable th:first-child,.qtable td:first-child{text-align:left}
+.qtable input{width:4.5em;text-align:center;padding:.25em .3em}
+.qtable tfoot td{color:var(--muted)}
+.qtable .bad{color:var(--warn);font-weight:600}
+.prize small.glines{font-size:.32em;margin-top:2px;letter-spacing:.02em}
+@media (prefers-reduced-motion:reduce){.ticket .n.win,.grid li button.win{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>학교 행운권 추첨기</h1><span id="schoolNote">학번 추첨 · 중복 당첨 없음</span></div>
+    <nav>
+      <button id="tabDraw" aria-pressed="true">추첨</button>
+      <button id="tabSet" aria-pressed="false">설정</button>
+      <button id="fsBtn" aria-pressed="false">전체화면 On/Off (F11)</button>
+      <button id="sndBtn" aria-pressed="true">소리 켜짐</button>
+      <label class="vol" for="vol">음량<input id="vol" type="range" min="0" max="1" step="0.05"></label>
+    </nav>
+  </header>
+
+  <section id="viewDraw" class="stage">
+    <div class="board">
+      <div class="modes" role="group" aria-label="뽑기 방식">
+        <button data-m="one" aria-pressed="true">1명씩</button>
+        <button data-m="batch" aria-pressed="false">한번에</button>
+        <button data-m="step" aria-pressed="false">학년·반·번호 따로</button>
+      </div>
+      <div class="batchopt" id="batchOpt" hidden>
+        <label for="batchN" style="flex-direction:row;align-items:center;gap:8px;font-size:.95rem">한 번에 <input id="batchN" type="number" min="1" inputmode="numeric" value="5"> 명</label>
+      </div>
+
+      <div class="prize" id="prizeName">3등<small>0 / 5명</small></div>
+
+      <div class="ticket" id="ticket" aria-live="polite">
+        <span class="n" id="tG">?</span><span class="u">학년</span>
+        <span class="n" id="tC">?</span><span class="u">반</span>
+        <span class="n" id="tN">?</span><span class="u">번</span>
+      </div>
+      <div class="batch" id="batchBox" hidden>
+        <div class="legend">학년 - 반 - 번호</div>
+        <ul class="grid" id="grid" aria-live="polite"></ul>
+      </div>
+
+      <div class="msg" id="msg">버튼을 누르면 추첨을 시작합니다</div>
+      <div class="actions">
+        <button class="big" id="drawBtn">추첨하기</button>
+        <button id="redrawBtn" disabled>불참 · 다시 뽑기</button>
+      </div>
+      <div class="hint" id="hint">스페이스바로도 추첨할 수 있습니다</div>
+    </div>
+
+    <aside class="log">
+      <h2>당첨 기록</h2>
+      <div class="pool" id="poolInfo"></div>
+      <div class="groups" id="groups"></div>
+      <div class="logbtns">
+        <button id="copyBtn">결과 복사</button>
+        <button id="resetBtn" class="danger">추첨 초기화</button>
+      </div>
+      <div class="confirm" id="resetConfirm" hidden>
+        당첨 기록을 모두 지우고 처음부터 다시 추첨할까요?
+        <div><button id="resetYes" class="danger">모두 지우기</button><button id="resetNo">취소</button></div>
+      </div>
+      <div class="hint" id="copyNote" style="text-align:left"></div>
+    </aside>
+  </section>
+
+  <section id="viewSet" class="settings" hidden>
+    <div class="card wide">
+      <h2>추첨 방식</h2>
+      <div class="choice" role="group" aria-label="추첨 방식">
+        <button id="modeRank" aria-pressed="true"><strong>등수 있음</strong><span>3등 → 2등 → 1등처럼 상품별로 차례로 추첨</span></button>
+        <button id="modeSingle" aria-pressed="false"><strong>등수 없음</strong><span>상품 하나, 총 당첨 인원만 정해서 추첨</span></button>
+      </div>
+      <span class="example" id="exampleTag">지금 값은 예시입니다</span>
+    </div>
+
+    <div class="card">
+      <h2>학년 · 반 · 인원</h2>
+      <p>반별 인원이 기본값과 다른 반만 "예외 반"에 적어 주세요. 예: <code>3반 24, 5반 26</code></p>
+      <div class="rows" id="gradeRows"></div>
+      <button class="add" id="addGrade">+ 학년 추가</button>
+    </div>
+
+    <div class="card" id="rankCard">
+      <h2>상품 구성 (등수 있음)</h2>
+      <p>위에서부터 차례로 추첨합니다. 보통 낮은 등수를 위에 둡니다.</p>
+      <div class="rows" id="prizeRows"></div>
+      <button class="add" id="addPrize">+ 상품 추가</button>
+    </div>
+
+    <div class="card" id="singleCard" hidden>
+      <h2>상품 (등수 없음)</h2>
+      <p>모든 당첨자가 같은 상품을 받습니다.</p>
+      <div class="row single">
+        <label for="sgName">상품 이름<input id="sgName" type="text"></label>
+        <label for="sgCount">총 당첨 인원<input id="sgCount" type="number" min="1" inputmode="numeric"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>추첨에서 뺄 학번</h2>
+      <p>결번, 전출생, 결석생 등. <code>학년-반-번호</code> 형식으로 쉼표나 줄바꿈으로 구분합니다. 예: <code>1-3-15, 2-1-30</code></p>
+      <label for="excl">제외 학번<textarea id="excl" rows="4"></textarea></label>
+    </div>
+
+    <div class="card wide" id="quotaCard">
+      <h2>학년별 배분</h2>
+      <p>켜면 상품마다 학년별 당첨 인원이 미리 정해져서 한 학년에 상이 몰리지 않습니다. 추첨할 때 어느 학년이 먼저 나올지는 무작위입니다.</p>
+      <div class="seg" role="group" aria-label="학년별 배분 방식">
+        <button data-q="off" aria-pressed="true">사용 안 함</button>
+        <button data-q="equal" aria-pressed="false">학년별 똑같이</button>
+        <button data-q="ratio" aria-pressed="false">학생 수 비율</button>
+        <button data-q="manual" aria-pressed="false">직접 입력</button>
+      </div>
+      <div class="qwrap" id="qWrap" hidden><table class="qtable" id="qTable"></table></div>
+      <p id="qNote"></p>
+    </div>
+
+    <div class="card">
+      <h2>확인</h2>
+      <div class="summary" id="summary"></div>
+      <ul class="errors" id="errors"></ul>
+      <div class="warnbox" id="modeWarn" hidden>추첨 방식을 바꾸면 지금까지의 당첨 기록이 지워집니다.</div>
+      <div><button class="big" id="saveBtn">저장하고 추첨 화면으로</button></div>
+      <p>설정은 이 브라우저에 저장됩니다. 추첨 도중 새로고침해도 기록이 남지만, 행사 당일에는 같은 컴퓨터·같은 브라우저를 쓰세요.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const KEY = "mokryeonje-draw-v2";
+  const DEFAULT = {
+    example: true,
+    mode: "rank",
+    grades: [
+      {g:1, classes:6, size:25, over:""},
+      {g:2, classes:6, size:25, over:""},
+      {g:3, classes:6, size:25, over:""}
+    ],
+    rankPrizes: [ {name:"3등", count:5}, {name:"2등", count:3}, {name:"1등", count:1} ],
+    single: {name:"행운상", count:20},
+    exclude: "",
+    quota: {mode:"off", manual:{}, seed:0},
+    winners: [],  // {prize, id}
+    absent: []    // {prize, id}
+  };
+  let S = load();
+  let drawMode = "one";      // one | batch | step
+  let spinning = false;
+  let lastWins = [];         // 직전 추첨 결과 [{prize,id}]
+  let selected = new Set();  // 한번에 뽑기에서 불참으로 고른 학번
+  let step = null;           // {prize, id, stage:0..3}
+
+  function load(){
+    try{ const raw = localStorage.getItem(KEY); if(raw){ const o = JSON.parse(raw); if(o && o.grades && o.rankPrizes) return fix(o); } }catch(e){}
+    return fix(JSON.parse(JSON.stringify(DEFAULT)));
+  }
+  function fix(o){
+    if(!o.quota) o.quota = {mode:"off", manual:{}, seed:0};
+    if(!o.quota.manual) o.quota.manual = {};
+    if(!o.quota.seed){ const a = new Uint32Array(1); crypto.getRandomValues(a); o.quota.seed = a[0] || 1; }
+    return o;
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+  const $ = id => document.getElementById(id);
+  const prizesOf = st => st.mode === "single" ? [st.single] : st.rankPrizes;
+  const prizes = () => prizesOf(S);
+
+  // ---------- 명단 ----------
+  function parseOver(txt){
+    const map = {}, bad = [];
+    String(txt||"").split(/[,\n]/).map(s=>s.trim()).filter(Boolean).forEach(part=>{
+      const m = part.match(/^(\d+)\s*(?:반\s*[:=]?\s*|[:=]\s*|\s+)(\d+)\s*명?$/);
+      if(m) map[+m[1]] = +m[2]; else bad.push(part);
+    });
+    return {map, bad};
+  }
+  function parseExcl(txt){
+    const set = new Set(), bad = [];
+    String(txt||"").split(/[,\n\s]+/).map(s=>s.trim()).filter(Boolean).forEach(p=>{
+      const m = p.match(/^(\d+)-(\d+)-(\d+)$/);
+      if(m) set.add(`${+m[1]}-${+m[2]}-${+m[3]}`); else bad.push(p);
+    });
+    return {set, bad};
+  }
+  function buildRoster(st){
+    const ids = [], errors = [], seen = new Set();
+    st.grades.forEach(gr=>{
+      const g = +gr.g, c = +gr.classes, n = +gr.size;
+      if(!(g>0) || !(c>0) || !(n>0)){ errors.push(`${gr.g||"?"}학년: 학년, 반 수, 인원을 1 이상으로 입력해 주세요.`); return; }
+      if(seen.has(g)) errors.push(`${g}학년이 두 번 입력되어 있습니다.`);
+      seen.add(g);
+      const {map, bad} = parseOver(gr.over);
+      bad.forEach(b=>errors.push(`${g}학년 예외 반 "${b}"을(를) 읽지 못했습니다. "3반 24"처럼 적어 주세요.`));
+      Object.keys(map).forEach(k=>{ if(+k>c) errors.push(`${g}학년 ${k}반은 반 수(${c})보다 큽니다.`); });
+      for(let ci=1; ci<=c; ci++){ const size = map[ci] || n; for(let ni=1; ni<=size; ni++) ids.push(`${g}-${ci}-${ni}`); }
+    });
+    const ex = parseExcl(st.exclude);
+    ex.bad.forEach(b=>errors.push(`제외 학번 "${b}"을(를) 읽지 못했습니다. "1-3-15"처럼 적어 주세요.`));
+    const roster = ids.filter(id=>!ex.set.has(id));
+    return {roster, total: ids.length, excluded: ids.length - roster.length, errors};
+  }
+  function remainingPool(){
+    const used = new Set([...S.winners.map(w=>w.id), ...S.absent.map(a=>a.id)]);
+    return buildRoster(S).roster.filter(id=>!used.has(id));
+  }
+  function currentPrize(){
+    const ps = prizes();
+    for(let i=0;i<ps.length;i++){ if(S.winners.filter(w=>w.prize===i).length < +ps[i].count) return i; }
+    return -1;
+  }
+  const leftIn = p => +prizes()[p].count - S.winners.filter(w=>w.prize===p).length;
+
+  // ---------- 학년별 배분 ----------
+  function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  const gradeOf = id => id.split("-")[0];
+  function gradeCounts(st){ const m = {}; buildRoster(st).roster.forEach(id=>{ const g = gradeOf(id); m[g] = (m[g]||0) + 1; }); return m; }
+  function allocate(st){
+    const q = st.quota || {mode:"off"}; if(q.mode === "off") return null;
+    const ps = prizesOf(st), cnt = gradeCounts(st), gs = Object.keys(cnt).sort((a,b)=>a-b), errors = [];
+    if(!gs.length) return {table:[], gs, cnt, errors};
+    const pname = (p,i) => String(p.name||"").trim() || `${i+1}번째 상품`;
+    let table;
+    if(q.mode === "manual"){
+      table = ps.map((p,i)=>{ const src = (q.manual||{})[st.mode+":"+i] || {}, row = {}; gs.forEach(g=>{ row[g] = Math.max(0, Math.floor(+src[g] || 0)); }); return row; });
+      table.forEach((row,i)=>{ const sum = gs.reduce((a,g)=>a+row[g],0); if(sum !== +ps[i].count) errors.push(`${pname(ps[i],i)}: 학년별 합계(${sum}명)가 당첨 인원(${ps[i].count}명)과 다릅니다.`); });
+    }else{
+      // 누적 목표에 가장 못 미친 학년부터 한 자리씩 배정 → 상품을 다 합친 학년별 합계가 고르게 됨
+      const total = gs.reduce((a,g)=>a+cnt[g],0), w = {};
+      gs.forEach(g=>{ w[g] = q.mode === "ratio" ? cnt[g]/total : 1/gs.length; });
+      const rng = mulberry(q.seed || 1), cum = {}, avail = {}; let soFar = 0;
+      gs.forEach(g=>{ cum[g] = 0; avail[g] = cnt[g]; });
+      table = ps.map((p,i)=>{
+        const c = Math.max(0, Math.floor(+p.count || 0)); soFar += c;
+        const order = gs.slice(); for(let x=order.length-1; x>0; x--){ const y = Math.floor(rng()*(x+1)); [order[x],order[y]] = [order[y],order[x]]; }
+        const a = {}; gs.forEach(g=>{ a[g] = 0; });
+        for(let k=0; k<c; k++){
+          let best = null, bv = -Infinity;
+          order.forEach(g=>{ if(avail[g] - a[g] <= 0) return; const v = soFar*w[g] - cum[g] - a[g]; if(v > bv + 1e-9){ bv = v; best = g; } });
+          if(best === null) break; a[best]++;
+        }
+        gs.forEach(g=>{ cum[g] += a[g]; avail[g] -= a[g]; });
+        if(gs.reduce((s2,g)=>s2+a[g],0) < c) errors.push(`${pname(p,i)}: 학년 인원이 부족해 모두 배분할 수 없습니다.`);
+        return a;
+      });
+    }
+    gs.forEach(g=>{ const sum = table.reduce((a,row)=>a+row[g],0); if(sum > cnt[g]) errors.push(`${g}학년 배분 합계(${sum}명)가 ${g}학년 추첨 대상(${cnt[g]}명)보다 많습니다.`); });
+    return {table, gs, cnt, errors};
+  }
+  let ALLOC = null;
+  function refreshAlloc(){ ALLOC = allocate(S); }
+  function quotaLeft(p, temp){
+    if(!ALLOC || !ALLOC.table[p]) return null;
+    const left = {};
+    ALLOC.gs.forEach(g=>{ left[g] = ALLOC.table[p][g] - S.winners.filter(w=>w.prize===p && gradeOf(w.id)===g).length; });
+    (temp||[]).forEach(id=>{ const g = gradeOf(id); if(g in left) left[g]--; });
+    return left;
+  }
+  function eligiblePool(p, temp){
+    const used = new Set(temp||[]);
+    let pool = remainingPool().filter(id=>!used.has(id));
+    const left = quotaLeft(p, temp);
+    return left ? pool.filter(id=>(left[gradeOf(id)]||0) > 0) : pool;
+  }
+  // 학년은 남은 몫에 비례해 무작위로 고르고, 그 학년 안에서 한 명을 고름
+  function pickFor(p, temp){
+    const pool = eligiblePool(p, temp); if(!pool.length) return null;
+    const left = quotaLeft(p, temp); if(!left) return pool[rand(pool.length)];
+    const byG = {}; pool.forEach(id=>{ (byG[gradeOf(id)] = byG[gradeOf(id)] || []).push(id); });
+    const gs = Object.keys(byG), wts = gs.map(g=>Math.max(0, left[g]));
+    let r = rand(wts.reduce((a,b)=>a+b,0)), gi = 0;
+    while(r >= wts[gi]){ r -= wts[gi]; gi++; }
+    const arr = byG[gs[gi]]; return arr[rand(arr.length)];
+  }
+
+  // ---------- 효과음 (전자음, 파일 없음) ----------
+  const SND_KEY = "mokryeonje-sound";
+  let snd = {on:true, vol:0.6};
+  try{ const o = JSON.parse(localStorage.getItem(SND_KEY)); if(o) snd = Object.assign(snd, o); }catch(e){}
+  let ac = null, master = null;
+  function audio(){
+    if(!snd.on) return null;
+    try{
+      if(!ac){ const C = window.AudioContext || window.webkitAudioContext; if(!C) return null; ac = new C(); master = ac.createGain(); const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; master.connect(comp); comp.connect(ac.destination); }
+      if(ac.state === "suspended") ac.resume();
+      master.gain.value = snd.vol;
+      return ac;
+    }catch(e){ return null; }
+  }
+  function tone(freq, dur, o){
+    o = o || {}; const a = audio(); if(!a) return;
+    const t = a.currentTime + (o.at || 0), osc = a.createOscillator(), g = a.createGain();
+    osc.type = o.type || "square"; osc.frequency.setValueAtTime(freq, t);
+    if(o.slide) osc.frequency.exponentialRampToValueAtTime(freq * o.slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(o.vol || 0.3, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(master); osc.start(t); osc.stop(t + dur + 0.03);
+  }
+  const C5=523.25, E5=659.25, G5=783.99, C6=1046.5, E6=1318.5;
+  const sfx = {
+    tick(){ tone(1500, 0.03, {type:"square", vol:0.10}); },
+    tok(){ tone(880, 0.07, {type:"triangle", vol:0.32}); },
+    ding(){ tone(E6, 0.6, {type:"sine", vol:0.35}); tone(E6*1.5, 0.45, {type:"sine", vol:0.10}); },
+    fanfare(at0){ fanfare(at0 || 0); },
+    finale(){
+      fanfare(0);
+      const t = 2.9;
+      [C5,E5,G5,C6,E6].forEach((f,i)=>brass(f, 0.12, t + i*0.08, 0.16));
+      [C5,E5,G5,C6].forEach(f=>brass(f, 2.2, t + 0.45, 0.13, true));
+      brass(C5/4, 2.2, t + 0.45, 0.16);
+      drum(t + 0.45, 0.5); crash(t + 0.45, 2.4);
+    },
+    absent(){ tone(330, 0.3, {type:"sine", vol:0.25, slide:0.6}); }
+  };
+  // 금관악기 느낌: 톱니파 두 개를 살짝 어긋나게 겹치고 필터로 밝기를 조절
+  function brass(freq, dur, at, vol, vib){
+    const a = audio(); if(!a) return;
+    const t = a.currentTime + at, g = a.createGain(), lp = a.createBiquadFilter();
+    lp.type = "lowpass"; lp.Q.value = 1.2;
+    lp.frequency.setValueAtTime(700, t); lp.frequency.linearRampToValueAtTime(3800, t + 0.04); lp.frequency.exponentialRampToValueAtTime(1800, t + Math.max(0.08, dur));
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.025);
+    g.gain.setValueAtTime(vol * 0.8, t + Math.max(0.03, dur * 0.6)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+    lp.connect(g); g.connect(master);
+    [-7, 7].forEach(cents=>{
+      const o = a.createOscillator(); o.type = "sawtooth"; o.frequency.value = freq; o.detune.value = cents;
+      if(vib){ const l = a.createOscillator(), lg = a.createGain(); l.frequency.value = 5.5; lg.gain.value = 9; l.connect(lg); lg.connect(o.detune); l.start(t + 0.25); l.stop(t + dur + 0.1); }
+      o.connect(lp); o.start(t); o.stop(t + dur + 0.1);
+    });
+  }
+  function drum(at, vol){
+    const a = audio(); if(!a) return;
+    const t = a.currentTime + at, o = a.createOscillator(), g = a.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.4);
+  }
+  function crash(at, dur){
+    const a = audio(); if(!a) return;
+    const t = a.currentTime + at, len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i] = Math.random()*2 - 1;
+    const src = a.createBufferSource(), hp = a.createBiquadFilter(), g = a.createGain();
+    src.buffer = buf; hp.type = "highpass"; hp.frequency.value = 5000;
+    g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(hp); hp.connect(g); g.connect(master); src.start(t); src.stop(t + dur);
+  }
+  // 따따라따 / 따따따 / 따따라따~~~~
+  const G4 = 392, D5 = 587.33, G5b = 783.99;
+  function fanfare(at){
+    const e = 0.12;           // 한 박(8분음표) 길이
+    const notes = [
+      // 따 따 라 따
+      [G4,0,0.09],[G4,1,0.09],[C5,2,0.09],[E5,3,0.3],
+      // 따 따 따
+      [D5,5.5,0.09],[D5,6.5,0.09],[D5,7.5,0.2],
+      // 따 따 라 따~~~~
+      [E5,9.5,0.09],[E5,10.5,0.09],[G5b,11.5,0.09]
+    ];
+    notes.forEach(([f,b,d])=>brass(f, d, at + b*e, 0.2));
+    const end = at + 12.5*e;
+    [C5,E5,G5b,C6].forEach(f=>brass(f, 1.5, end, 0.14, true));   // 마지막 화음 길게
+    brass(C5/4, 1.5, end, 0.18);                                  // 낮은 바탕음
+    [0,3,5.5,9.5].forEach(b=>drum(at + b*e, 0.35));               // 구절마다 북
+    drum(end, 0.5); crash(end, 1.8);
+  }
+  const winSound = () => (currentPrize() === -1 ? sfx.finale() : sfx.fanfare());
+
+  // ---------- 공정한 난수 ----------
+  function rand(n){
+    const max = Math.floor(0xFFFFFFFF / n) * n; const a = new Uint32Array(1);
+    do{ crypto.getRandomValues(a); }while(a[0] >= max);
+    return a[0] % n;
+  }
+  function sample(arr, k){ const a = arr.slice(); for(let i=0;i<k;i++){ const j = i + rand(a.length - i); [a[i],a[j]]=[a[j],a[i]]; } return a.slice(0,k); }
+  const reduce = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- 화면 표시 ----------
+  const digits = ["tG","tC","tN"];
+  function setDigit(i, val, cls){ const el = $(digits[i]); el.textContent = val; el.className = "n" + (cls ? " " + cls : ""); }
+  function clearTicket(){ digits.forEach((_,i)=>setDigit(i,"?","")); }
+  function showWin(id){ id.split("-").forEach((v,i)=>setDigit(i,v,"win")); }
+  function esc(s){ return String(s).replace(/[&<>"]/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch])); }
+  function setMsg(t, done){ $("msg").className = "msg" + (done?" done":""); $("msg").textContent = t; }
+
+  function drawLabel(){
+    if(drawMode === "batch"){ return `${batchCount()}명 한꺼번에 뽑기`; }
+    if(drawMode === "step"){ const s = step ? step.stage : 0; return ["학년 뽑기","반 뽑기","번호 뽑기","학년 뽑기"][s]; }
+    return "추첨하기";
+  }
+  function batchCount(){
+    const p = currentPrize(); if(p === -1) return 0;
+    const want = Math.max(1, Math.floor(+$("batchN").value || 1));
+    return Math.min(want, leftIn(p), eligiblePool(p).length);
+  }
+
+  function renderDraw(){
+    const ps = prizes(), p = currentPrize(), pool = p === -1 ? remainingPool() : eligiblePool(p);
+    const midStep = drawMode === "step" && step && step.stage > 0 && step.stage < 3;
+    document.querySelectorAll(".modes button").forEach(b=>{
+      b.setAttribute("aria-pressed", b.dataset.m === drawMode);
+      b.disabled = spinning || midStep;
+    });
+    $("batchOpt").hidden = drawMode !== "batch";
+    $("ticket").hidden = drawMode === "batch";
+    $("batchBox").hidden = drawMode !== "batch";
+    $("batchN").disabled = spinning;
+
+    $("prizeName").hidden = S.mode === "single" && p !== -1;
+    if(p === -1){
+      $("prizeName").innerHTML = '추첨 완료<small>모든 당첨자가 정해졌습니다</small>';
+      $("drawBtn").disabled = true;
+      if(!lastWins.length) setMsg("축하합니다!", true);
+    }else{
+      const got = S.winners.filter(w=>w.prize===p).length;
+      const left = quotaLeft(p);
+      const gl = (left && S.mode === "rank") ? `<small class="glines">${ALLOC.gs.map(g=>`${g}학년 ${ALLOC.table[p][g]-left[g]}/${ALLOC.table[p][g]}`).join(" · ")}</small>` : "";
+      $("prizeName").innerHTML = `${esc(ps[p].name)}<small>${got} / ${ps[p].count}명</small>${gl}`;
+      $("drawBtn").disabled = spinning || pool.length === 0;
+      if(pool.length === 0) setMsg(ALLOC ? "배분된 학년에 남은 학생이 없습니다. 설정을 확인해 주세요." : "남은 추첨 대상이 없습니다. 설정을 확인해 주세요.");
+    }
+    $("drawBtn").textContent = drawLabel();
+
+    if(drawMode === "batch"){
+      $("redrawBtn").textContent = selected.size ? `선택한 ${selected.size}명 불참 · 다시 뽑기` : "불참 · 다시 뽑기";
+      $("redrawBtn").disabled = spinning || selected.size === 0 || pool.length === 0;
+      $("hint").textContent = lastWins.length ? "불참한 학번을 눌러 선택한 뒤 '다시 뽑기'를 누르세요" : "스페이스바로도 추첨할 수 있습니다";
+    }else{
+      $("redrawBtn").textContent = "불참 · 다시 뽑기";
+      $("redrawBtn").disabled = spinning || lastWins.length === 0 || midStep || pool.length === 0;
+      $("hint").textContent = drawMode === "step" ? "버튼을 누를 때마다 학년 → 반 → 번호 순으로 공개됩니다" : "스페이스바로도 추첨할 수 있습니다";
+    }
+
+    const {roster} = buildRoster(S);
+    $("poolInfo").textContent = `추첨 대상 ${roster.length}명 · 남은 인원 ${remainingPool().length}명`;
+    const box = $("groups"); box.innerHTML = ""; let any = false;
+    ps.forEach((pr,i)=>{
+      const w = S.winners.filter(x=>x.prize===i), a = S.absent.filter(x=>x.prize===i);
+      if(!w.length && !a.length) return;
+      any = true;
+      const div = document.createElement("div"); div.className = "group";
+      div.innerHTML = S.mode === "single" ? `<h3>당첨자</h3>` : `<h3>${esc(pr.name)}<span>${w.length} / ${pr.count}</span></h3>`;
+      const ul = document.createElement("ul"); ul.className = "chips";
+      w.forEach(x=>{ const li=document.createElement("li"); li.textContent=x.id; ul.appendChild(li); });
+      a.forEach(x=>{ const li=document.createElement("li"); li.className="absent"; li.title="불참"; li.textContent=x.id; ul.appendChild(li); });
+      div.appendChild(ul); box.appendChild(div);
+    });
+    if(!any) box.innerHTML = '<div class="empty">아직 당첨자가 없습니다.</div>';
+    $("schoolNote").textContent = S.example ? "예시 설정 사용 중 · 설정에서 실제 인원을 입력하세요" : (S.mode === "single" ? "등수 없음" : "등수 있음") + (ALLOC ? " · 학년별 배분" : "") + " · 중복 당첨 없음";
+  }
+
+  function renderGrid(ids, cls){
+    const g = $("grid"); g.innerHTML = "";
+    ids.forEach(id=>{
+      const li = document.createElement("li"); const b = document.createElement("button");
+      b.textContent = id; if(cls) b.className = cls;
+      if(cls === "win"){
+        b.setAttribute("aria-pressed", selected.has(id));
+        if(selected.has(id)) b.classList.add("sel");
+        b.addEventListener("click", ()=>{
+          if(spinning) return;
+          selected.has(id) ? selected.delete(id) : selected.add(id);
+          renderGrid(lastWins.map(w=>w.id), "win"); renderDraw();
+        });
+      }else b.tabIndex = -1;
+      li.appendChild(b); g.appendChild(li);
+    });
+  }
+
+  // ---------- 1명씩 ----------
+  function spinTicket(pool, onDone){
+    const total = reduce() ? 600 : 2800, start = performance.now(); let last = 0;
+    (function frame(now){
+      const t = now - start;
+      if(t < total){
+        if(now - last > 40 + (t/total)*220){ pool[rand(pool.length)].split("-").forEach((v,i)=>setDigit(i,v,"spin")); sfx.tick(); last = now; }
+        requestAnimationFrame(frame);
+      }else onDone();
+    })(performance.now());
+  }
+  function drawOne(){
+    const p = currentPrize(), pool = eligiblePool(p); if(p === -1 || !pool.length) return;
+    const pick = pickFor(p);
+    spinning = true; lastWins = []; renderDraw(); setMsg("두근두근…");
+    spinTicket(pool, ()=>{
+      S.winners.push({prize:p, id:pick}); save();
+      lastWins = [{prize:p, id:pick}]; spinning = false;
+      showWin(pick); setMsg(`${prizes()[p].name} 당첨! 축하합니다`); renderDraw(); winSound();
+    });
+  }
+
+  // ---------- 한번에 ----------
+  function drawBatch(k){
+    const p = currentPrize(), pool = eligiblePool(p); if(p === -1 || !pool.length) return;
+    k = Math.min(k || batchCount(), leftIn(p), pool.length); if(k < 1) return;
+    const picks = [];
+    for(let i=0; i<k; i++){ const id = pickFor(p, picks); if(!id) break; picks.push(id); }
+    k = picks.length; if(k < 1) return;
+    spinning = true; selected.clear(); lastWins = []; renderDraw(); setMsg(`${k}명을 뽑는 중…`);
+    renderGrid(picks.map(()=>"?-?-?"), "");
+    const btns = [...document.querySelectorAll("#grid button")];
+    const total = reduce() ? 500 : 2000, gap = reduce() ? 0 : Math.max(60, Math.min(220, 1600 / k));
+    const start = performance.now(); let last = 0, shown = 0;
+    (function frame(now){
+      const t = now - start;
+      if(t >= total){
+        const due = gap ? Math.min(k, Math.floor((t - total) / gap) + 1) : k;
+        while(shown < due){ btns[shown].textContent = picks[shown]; btns[shown].className = "win"; if(gap) sfx.tok(); shown++; }
+      }
+      if(shown < k){
+        if(now - last > 60 + Math.min(1, t/total) * 160){
+          for(let i=shown; i<k; i++) btns[i].textContent = pool[rand(pool.length)];
+          if(t < total) sfx.tick();
+          last = now;
+        }
+        requestAnimationFrame(frame);
+      }else{
+        picks.forEach(id=>S.winners.push({prize:p, id})); save();
+        lastWins = picks.map(id=>({prize:p, id})); spinning = false;
+        renderGrid(picks, "win");
+        setMsg(`${prizes()[p].name} ${k}명 당첨! 축하합니다`); renderDraw(); winSound();
+      }
+    })(performance.now());
+  }
+
+  // ---------- 학년·반·번호 따로 ----------
+  function drawStep(){
+    if(!step || step.stage === 3){
+      const p = currentPrize(), pool = eligiblePool(p); if(p === -1 || !pool.length) return;
+      step = {prize:p, id: pickFor(p), stage:0, pool};
+      lastWins = []; clearTicket();
+    }
+    const i = step.stage, parts = step.id.split("-");
+    // 돌아가는 동안 보여 줄 후보: 이미 공개된 앞자리와 맞는 학생들의 해당 자리 값
+    const cands = [...new Set(step.pool.filter(id=>{ const q=id.split("-"); for(let j=0;j<i;j++) if(q[j]!==parts[j]) return false; return true; }).map(id=>id.split("-")[i]))];
+    spinning = true; renderDraw(); setMsg(["학년을 뽑는 중…","반을 뽑는 중…","번호를 뽑는 중…"][i]);
+    const total = reduce() ? 500 : 2000, start = performance.now(); let last = 0;
+    (function frame(now){
+      const t = now - start;
+      if(t < total){
+        if(now - last > 50 + (t/total)*220){ setDigit(i, cands[rand(cands.length)], "spin"); sfx.tick(); last = now; }
+        requestAnimationFrame(frame);
+      }else{
+        spinning = false; step.stage = i + 1;
+        if(step.stage < 3){
+          setDigit(i, parts[i], "shown"); sfx.ding();
+          setMsg(i === 0 ? `${parts[0]}학년! 이제 반을 뽑습니다` : `${parts[0]}학년 ${parts[1]}반! 이제 번호를 뽑습니다`);
+        }else{
+          S.winners.push({prize:step.prize, id:step.id}); save();
+          lastWins = [{prize:step.prize, id:step.id}];
+          showWin(step.id); setMsg(`${prizes()[step.prize].name} 당첨! 축하합니다`); winSound();
+        }
+        renderDraw();
+      }
+    })(performance.now());
+  }
+
+  function draw(){
+    if(spinning) return;
+    if(drawMode === "batch") drawBatch();
+    else if(drawMode === "step") drawStep();
+    else drawOne();
+  }
+  function markAbsent(list){
+    if(list.length) sfx.absent();
+    list.forEach(w=>{
+      const idx = S.winners.findIndex(x=>x.id===w.id && x.prize===w.prize);
+      if(idx>-1) S.winners.splice(idx,1);
+      S.absent.push(w);
+    });
+    save();
+  }
+  function redraw(){
+    if(spinning) return;
+    if(drawMode === "batch"){
+      if(!selected.size) return;
+      const gone = lastWins.filter(w=>selected.has(w.id));
+      markAbsent(gone); selected.clear();
+      drawBatch(gone.length);
+    }else{
+      if(!lastWins.length) return;
+      markAbsent(lastWins); lastWins = [];
+      if(drawMode === "step"){ step = null; clearTicket(); setMsg("불참 처리했습니다. 다시 학년부터 뽑습니다"); renderDraw(); }
+      else drawOne();
+    }
+  }
+
+  document.querySelectorAll(".modes button").forEach(b=>b.addEventListener("click", ()=>{
+    if(spinning) return;
+    drawMode = b.dataset.m; lastWins = []; selected.clear(); step = null;
+    clearTicket(); $("grid").innerHTML = "";
+    setMsg(currentPrize() === -1 ? "축하합니다!" : "버튼을 누르면 추첨을 시작합니다", currentPrize() === -1);
+    if(drawMode === "batch"){ const p = currentPrize(); if(p > -1) $("batchN").value = leftIn(p); }
+    renderDraw();
+  }));
+  $("batchN").addEventListener("input", renderDraw);
+  $("drawBtn").addEventListener("click", draw);
+  $("redrawBtn").addEventListener("click", redraw);
+  document.addEventListener("keydown", e=>{
+    if(e.code==="Space" && !$("viewDraw").hidden && !/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){ e.preventDefault(); draw(); }
+  });
+
+  $("copyBtn").addEventListener("click", ()=>{
+    const lines = ["행운권 추첨 결과"];
+    prizes().forEach((pr,i)=>{
+      const w = S.winners.filter(x=>x.prize===i).map(x=>x.id);
+      lines.push(`${pr.name} (${w.length}/${pr.count}명): ${w.join(", ") || "-"}`);
+    });
+    if(S.absent.length) lines.push(`불참으로 재추첨: ${S.absent.map(x=>x.id).join(", ")}`);
+    if(ALLOC){ const byG = {}; S.winners.forEach(w=>{ const g = gradeOf(w.id); byG[g] = (byG[g]||0) + 1; }); lines.push("학년별 당첨: " + ALLOC.gs.map(g=>`${g}학년 ${byG[g]||0}명`).join(" · ")); }
+    const text = lines.join("\n"), note = $("copyNote");
+    const fallback = t=>{
+      note.textContent = "자동 복사가 막혀 있습니다. 아래 내용을 선택해 복사하세요.";
+      const ta = document.createElement("textarea"); ta.value = t; ta.rows = 6; ta.readOnly = true;
+      note.appendChild(ta); ta.focus(); ta.select();
+    };
+    try{ navigator.clipboard.writeText(text).then(()=>{ note.textContent = "복사했습니다. 한글이나 메신저에 붙여 넣으세요."; }).catch(()=>fallback(text)); }
+    catch(e){ fallback(text); }
+  });
+  $("resetBtn").addEventListener("click", ()=>{ $("resetConfirm").hidden = false; });
+  $("resetNo").addEventListener("click", ()=>{ $("resetConfirm").hidden = true; });
+  $("resetYes").addEventListener("click", ()=>{
+    S.winners = []; S.absent = []; lastWins = []; selected.clear(); step = null; save();
+    $("resetConfirm").hidden = true; clearTicket(); $("grid").innerHTML = "";
+    setMsg("버튼을 누르면 추첨을 시작합니다"); renderDraw();
+  });
+  $("fsBtn").addEventListener("click", ()=>{
+    const el = document.documentElement, fail = ()=>{
+      const note = $("schoolNote"), prev = note.textContent;
+      note.textContent = "이 화면에서는 버튼이 막혀 있습니다. 키보드의 F11을 눌러 주세요.";
+      setTimeout(()=>{ note.textContent = prev; }, 3500);
+    };
+    try{
+      if(document.fullscreenElement) document.exitFullscreen();
+      else if(el.requestFullscreen) el.requestFullscreen().catch(fail); else fail();
+    }catch(e){ fail(); }
+  });
+
+  function renderSound(){
+    $("sndBtn").setAttribute("aria-pressed", snd.on);
+    $("sndBtn").textContent = snd.on ? "소리 켜짐" : "소리 꺼짐";
+    $("vol").value = snd.vol; $("vol").disabled = !snd.on;
+  }
+  const saveSnd = () => { try{ localStorage.setItem(SND_KEY, JSON.stringify(snd)); }catch(e){} };
+  $("sndBtn").addEventListener("click", ()=>{ snd.on = !snd.on; saveSnd(); renderSound(); if(snd.on) sfx.tok(); });
+  $("vol").addEventListener("input", e=>{ snd.vol = +e.target.value; saveSnd(); if(master) master.gain.value = snd.vol; });
+  $("vol").addEventListener("change", ()=>sfx.tok());
+  document.addEventListener("pointerdown", ()=>{ if(snd.on) audio(); }, {once:true});
+  renderSound();
+
+  document.addEventListener("fullscreenchange", ()=>{ $("fsBtn").setAttribute("aria-pressed", !!document.fullscreenElement); });
+
+  // ---------- 설정 ----------
+  let D = JSON.parse(JSON.stringify(S));
+  function openSettings(){ D = JSON.parse(JSON.stringify(S)); renderSettings(); }
+  function renderSettings(){
+    $("modeRank").setAttribute("aria-pressed", D.mode === "rank");
+    $("modeSingle").setAttribute("aria-pressed", D.mode === "single");
+    $("rankCard").hidden = D.mode !== "rank";
+    $("singleCard").hidden = D.mode !== "single";
+
+    const gr = $("gradeRows"); gr.innerHTML = "";
+    D.grades.forEach((g,i)=>{
+      const row = document.createElement("div"); row.className = "row grade";
+      row.innerHTML = `
+        <label for="g${i}">학년<input id="g${i}" type="number" min="1" inputmode="numeric" value="${esc(g.g)}"></label>
+        <label for="c${i}">반 수<input id="c${i}" type="number" min="1" inputmode="numeric" value="${esc(g.classes)}"></label>
+        <label for="s${i}">반별 인원<input id="s${i}" type="number" min="1" inputmode="numeric" value="${esc(g.size)}"></label>
+        <button class="x" aria-label="${esc(g.g)}학년 삭제" data-del>삭제</button>
+        <label class="over" for="o${i}">예외 반 (선택)<input id="o${i}" type="text" placeholder="예: 3반 24, 5반 26" value="${esc(g.over||"")}"></label>`;
+      gr.appendChild(row);
+      [["g","g"],["c","classes"],["s","size"],["o","over"]].forEach(([p,k])=>row.querySelector(`#${p}${i}`).addEventListener("input", e=>{ D.grades[i][k] = e.target.value; refresh(); }));
+      row.querySelector("[data-del]").addEventListener("click", ()=>{ D.grades.splice(i,1); renderSettings(); });
+    });
+
+    const pr = $("prizeRows"); pr.innerHTML = "";
+    D.rankPrizes.forEach((p,i)=>{
+      const row = document.createElement("div"); row.className = "row prize-row";
+      row.innerHTML = `
+        <label for="pn${i}">상품 이름<input id="pn${i}" type="text" value="${esc(p.name)}"></label>
+        <label for="pc${i}">당첨 인원<input id="pc${i}" type="number" min="1" inputmode="numeric" value="${esc(p.count)}"></label>
+        <button class="x" aria-label="${esc(p.name)} 삭제" data-del>삭제</button>`;
+      pr.appendChild(row);
+      row.querySelector(`#pn${i}`).addEventListener("input", e=>{ D.rankPrizes[i].name = e.target.value; refresh(); });
+      row.querySelector(`#pc${i}`).addEventListener("input", e=>{ D.rankPrizes[i].count = e.target.value; refresh(); });
+      row.querySelector("[data-del]").addEventListener("click", ()=>{ D.rankPrizes.splice(i,1); renderSettings(); });
+    });
+    $("sgName").value = D.single.name; $("sgCount").value = D.single.count;
+    $("excl").value = D.exclude || "";
+    refresh();
+  }
+  function validate(st){
+    const r = buildRoster(st), errors = r.errors.slice(), ps = prizesOf(st);
+    const A = allocate(st); if(A) A.errors.forEach(e=>errors.push(e));
+    if(!st.grades.length) errors.push("학년을 하나 이상 입력해 주세요.");
+    if(!ps.length) errors.push("상품을 하나 이상 입력해 주세요.");
+    let need = 0;
+    ps.forEach((p,i)=>{
+      if(!String(p.name||"").trim()) errors.push(st.mode==="single" ? "상품 이름이 비어 있습니다." : `${i+1}번째 상품 이름이 비어 있습니다.`);
+      if(!(+p.count>0)) errors.push(`${p.name||"상품"}의 당첨 인원을 1 이상으로 입력해 주세요.`);
+      else need += +p.count;
+    });
+    if(need > r.roster.length) errors.push(`당첨 인원 합계(${need}명)가 추첨 대상(${r.roster.length}명)보다 많습니다.`);
+    return {r, need, errors};
+  }
+  function refresh(){
+    const {r, need, errors} = validate(D);
+    $("summary").innerHTML = `추첨 대상 <strong>${r.roster.length}</strong>명 <span class="hint">(전체 ${r.total}명 − 제외 ${r.excluded}명)</span><br>당첨 인원 합계 <strong>${need}</strong>명`;
+    $("errors").innerHTML = errors.map(e=>`<li>${esc(e)}</li>`).join("");
+    $("saveBtn").disabled = errors.length > 0;
+    $("exampleTag").hidden = !D.example;
+    $("modeWarn").hidden = !(D.mode !== S.mode && (S.winners.length || S.absent.length));
+    renderQuota();
+  }
+  let qSig = "";
+  function renderQuota(force){
+    const q = D.quota;
+    document.querySelectorAll("#quotaCard .seg button").forEach(b=>b.setAttribute("aria-pressed", b.dataset.q === q.mode));
+    if(q.mode === "off"){ $("qWrap").hidden = true; $("qNote").textContent = "전교생 중에서 학년 구분 없이 뽑습니다."; qSig = ""; return; }
+    $("qWrap").hidden = false;
+    const A = allocate(D), ps = prizesOf(D), gs = A.gs;
+    const sig = [q.mode, D.mode, gs.join(","), ps.map(p=>p.name).join("|"), ps.length].join("#");
+    if(force || sig !== qSig || q.mode !== "manual"){
+      qSig = sig;
+      let h = `<thead><tr><th>상품</th>${gs.map(g=>`<th>${g}학년<br><span class="hint">대상 ${A.cnt[g]}명</span></th>`).join("")}<th>합계</th></tr></thead><tbody>`;
+      ps.forEach((p,i)=>{
+        h += `<tr><td>${esc(String(p.name||"").trim() || "(이름 없음)")}</td>`;
+        gs.forEach(g=>{ h += q.mode === "manual"
+          ? `<td><input type="number" min="0" inputmode="numeric" id="q-${i}-${g}" data-p="${i}" data-g="${g}" value="${A.table[i][g]}" aria-label="${esc(p.name)} ${g}학년"></td>`
+          : `<td>${A.table[i][g]}</td>`; });
+        h += `<td id="qs-${i}"></td></tr>`;
+      });
+      h += `</tbody><tfoot><tr><td>학년 합계</td>${gs.map(g=>`<td id="qg-${g}"></td>`).join("")}<td id="qall"></td></tr></tfoot>`;
+      $("qTable").innerHTML = h;
+      $("qTable").querySelectorAll("input").forEach(inp=>inp.addEventListener("input", e=>{
+        const k = D.mode + ":" + e.target.dataset.p;
+        D.quota.manual[k] = D.quota.manual[k] || {};
+        D.quota.manual[k][e.target.dataset.g] = e.target.value;
+        refresh();
+      }));
+    }
+    ps.forEach((p,i)=>{ const el = $("qs-"+i); if(!el) return; const sum = gs.reduce((a,g)=>a+A.table[i][g],0); el.textContent = `${sum} / ${p.count}`; el.className = sum === +p.count ? "" : "bad"; });
+    gs.forEach(g=>{ const el = $("qg-"+g); if(el) el.textContent = A.table.reduce((a,row)=>a+row[g],0); });
+    if($("qall")) $("qall").textContent = A.table.reduce((a,row)=>a+gs.reduce((b,g)=>b+row[g],0),0);
+    $("qNote").textContent = q.mode === "equal" ? "학년마다 같은 인원이 되도록 나눕니다. 나누어떨어지지 않는 자리는 앞 상품에서 덜 받은 학년에 먼저 배정해 전체 합계가 고르게 됩니다."
+      : q.mode === "ratio" ? "학년별 추첨 대상 인원에 비례해 나눕니다. 남는 자리는 전체 합계가 비율에 가깝도록 배정합니다."
+      : "상품마다 학년별 인원을 직접 적어 주세요. 각 줄의 합계가 당첨 인원과 같아야 저장됩니다.";
+  }
+  document.querySelectorAll("#quotaCard .seg button").forEach(b=>b.addEventListener("click", ()=>{
+    const m = b.dataset.q;
+    if(m === "manual"){
+      const base = allocate(Object.assign({}, D, {quota: Object.assign({}, D.quota, {mode: D.quota.mode === "ratio" ? "ratio" : "equal"})}));
+      prizesOf(D).forEach((p,i)=>{ const k = D.mode + ":" + i; if(!D.quota.manual[k] || !Object.keys(D.quota.manual[k]).length) D.quota.manual[k] = Object.assign({}, base.table[i] || {}); });
+    }
+    D.quota.mode = m; renderQuota(true); refresh();
+  }));
+  $("modeRank").addEventListener("click", ()=>{ D.mode = "rank"; renderSettings(); });
+  $("modeSingle").addEventListener("click", ()=>{ D.mode = "single"; renderSettings(); });
+  $("sgName").addEventListener("input", e=>{ D.single.name = e.target.value; refresh(); });
+  $("sgCount").addEventListener("input", e=>{ D.single.count = e.target.value; refresh(); });
+  $("excl").addEventListener("input", e=>{ D.exclude = e.target.value; refresh(); });
+  $("addGrade").addEventListener("click", ()=>{
+    const next = D.grades.length ? Math.max(...D.grades.map(g=>+g.g||0))+1 : 1;
+    D.grades.push({g:next, classes:1, size:25, over:""}); renderSettings();
+  });
+  $("addPrize").addEventListener("click", ()=>{ D.rankPrizes.push({name:"", count:1}); renderSettings(); });
+  $("saveBtn").addEventListener("click", ()=>{
+    if(validate(D).errors.length) return;
+    D.grades = D.grades.map(g=>({g:+g.g, classes:+g.classes, size:+g.size, over:g.over||""}));
+    D.rankPrizes = D.rankPrizes.map(p=>({name:String(p.name).trim(), count:+p.count}));
+    D.single = {name:String(D.single.name).trim(), count:+D.single.count};
+    if(D.mode !== S.mode){ D.winners = []; D.absent = []; }
+    const n = prizesOf(D).length;
+    D.winners = D.winners.filter(w=>w.prize < n); D.absent = D.absent.filter(w=>w.prize < n);
+    D.example = false;
+    S = D; save(); refreshAlloc(); lastWins = []; selected.clear(); step = null;
+    clearTicket(); $("grid").innerHTML = ""; setMsg("버튼을 누르면 추첨을 시작합니다");
+    switchView("draw");
+  });
+
+  function switchView(v){
+    const isDraw = v === "draw";
+    $("viewDraw").hidden = !isDraw; $("viewSet").hidden = isDraw;
+    $("tabDraw").setAttribute("aria-pressed", isDraw); $("tabSet").setAttribute("aria-pressed", !isDraw);
+    $("tabSet").disabled = false;
+    if(isDraw) renderDraw(); else openSettings();
+  }
+  $("tabDraw").addEventListener("click", ()=>{ if(!spinning) switchView("draw"); });
+  $("tabSet").addEventListener("click", ()=>{ if(!spinning){ step = null; lastWins = []; clearTicket(); switchView("set"); } });
+
+  refreshAlloc(); clearTicket(); switchView("draw");
+})();
+</script>
+</body>
+</html>
